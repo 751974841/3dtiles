@@ -1,5 +1,15 @@
 name: Windows
-
+on:
+  # 手动触发
+  workflow_dispatch:
+  # 也可以保留原有的触发方式（例如 push 或 pull_request）
+  # push:
+  #   branches:
+  #     - master
+  # pull_request:
+  #   branches:
+  #     - master
+  
 jobs:
   build-and-test:
     runs-on: windows-latest
