@@ -1,15 +1,8 @@
 name: Windows
+
 on:
-  # 手动触发
   workflow_dispatch:
-  # 也可以保留原有的触发方式（例如 push 或 pull_request）
-  # push:
-  #   branches:
-  #     - master
-  # pull_request:
-  #   branches:
-  #     - master
-  
+
 jobs:
   build-and-test:
     runs-on: windows-latest
@@ -17,23 +10,37 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Cache dependencies
+    - name: Cache vcpkg
       uses: actions/cache@v4
       id: cache-vcpkg
       with:
         path: ./vcpkg
         key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/build.rs') }}
-        restore-keys: |
-          ${{ runner.os }}-vcpkg-
+        restore-keys: ${{ runner.os }}-vcpkg-
 
-    - name: Install dependencies on Windows
+    - name: Install dependencies
       if: steps.cache-vcpkg.outputs.cache-hit != 'true'
       run: |
         git clone https://github.com/microsoft/vcpkg.git
-        ./vcpkg/bootstrap-vcpkg.bat
-        ./vcpkg/vcpkg install gdal:x64-windows-release
-        ./vcpkg/vcpkg install osg:x64-windows-release
-        tree ./vcpkg/installed /F /A
+        .\vcpkg\bootstrap-vcpkg.bat
+        .\vcpkg\vcpkg install gdal:x64-windows-release
+        .\vcpkg\vcpkg install osg:x64-windows-release
 
-    - name: Build
+    - name: Build with Cargo
       run: cargo build --verbose --release
+
+    - name: List build output
+      run: dir target\release
+
+    # ─── 上传成果文件 ──────────────────────────────
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: my-app-release
+        # 把 .exe、.dll 以及你需要的所有文件都打包
+        path: |
+          target\release\my_app.exe
+          target\release\*.dll
+          # 如果想上传 vcpkg 的头文件或库：
+          # vcpkg\installed\x64-windows\bin\*
+          # vcpkg\installed\x64-windows\lib\*
