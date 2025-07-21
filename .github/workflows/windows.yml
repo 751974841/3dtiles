@@ -39,17 +39,19 @@ jobs:
       - name: Package binaries
         shell: pwsh
         run: |
-          # 清理临时发布目录
-          Remove-Item -Recurse -Force out\release || true
-          New-Item -ItemType Directory -Path out\release
-
+          # 清理临时发布目录（如果存在）
+          if (Test-Path 'out\release') {
+            Remove-Item -Recurse -Force 'out\release'
+          }
+          New-Item -ItemType Directory -Path out\release | Out-Null
+      
           # 找到 exe 和所有 dll 并复制到 out\release
           Copy-Item target\release\*.exe out\release\
           Copy-Item target\release\*.dll out\release\
-
-          # （可选）如果有额外依赖，手动从 vcpkg 安装目录拷贝：
+      
+          # （可选）拷贝 vcpkg 运行时 DLL
           # Copy-Item vcpkg\installed\x64-windows\bin\*.dll out\release\
-
+      
           # 压成 ZIP
           Compress-Archive -Path out\release\* -DestinationPath out\release.zip
 
