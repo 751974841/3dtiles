@@ -22,7 +22,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-vcpkg-
 
-      # 3. Install vcpkg (if not cached)
+      # 3. Install & bootstrap vcpkg if not cached
       - name: Install & Bootstrap vcpkg
         if: steps.cache-vcpkg.outputs.cache-hit != 'true'
         run: |
@@ -31,7 +31,7 @@ jobs:
           .\vcpkg\vcpkg install gdal:x64-windows-release
           .\vcpkg\vcpkg install osg:x64-windows-release
 
-      # 4. Build with Cargo
+      # 4. Build with Cargo (release)
       - name: Cargo build (release)
         run: cargo build --release --verbose
 
@@ -39,14 +39,14 @@ jobs:
       - name: List target/release
         run: dir target\release
 
-      # 6. Upload temporary artifact
+      # 6. Upload temporary artifacts
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: my-app-release
           path: |
-            target\release\my_app.exe
-            target\release\*.dll
+            target/release/*.exe
+            target/release/*.dll
 
       # 7. Create or update GitHub Release
       - name: Create GitHub Release
@@ -60,22 +60,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 8. Upload assets to the Release
-      - name: Upload Release assets
+      # 8. Upload executables to the Release (using wildcard to match actual .exe)
+      - name: Upload Release executables
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: target\release\my_app.exe
+          asset_path: target/release/*.exe
           asset_name: my_app.exe
           asset_content_type: application/octet-stream
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # 9. Upload DLLs to the Release
       - name: Upload Release DLLs
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: target\release\*.dll
+          asset_path: target/release/*.dll
           asset_name: dlls.zip
           asset_content_type: application/zip
         env:
