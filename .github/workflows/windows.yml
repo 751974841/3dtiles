@@ -34,7 +34,7 @@ jobs:
 
     # ─── 上传成果文件 ──────────────────────────────
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: my-app-release
         # 把 .exe、.dll 以及你需要的所有文件都打包
