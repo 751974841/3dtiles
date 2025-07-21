@@ -35,20 +35,15 @@ jobs:
       - name: Cargo build (release)
         run: cargo build --release --verbose
 
-      # 5. Show produced files
-      - name: List target/release
-        run: dir target\release
+      # 5. Normalize exe name
+      - name: Normalize exe name
+        shell: pwsh
+        run: |
+          # find the built .exe (ignoring .dll files)
+          $exe = Get-ChildItem target/release/*.exe | Where-Object { $_.Extension -eq '.exe' } | Select-Object -First 1
+          Copy-Item $exe.FullName target/release/app.exe
 
-      # 6. Upload temporary artifacts
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: my-app-release
-          path: |
-            target/release/*.exe
-            target/release/*.dll
-
-      # 7. Create or update GitHub Release
+      # 6. Create or update GitHub Release
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
@@ -60,24 +55,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 8. Upload executables to the Release (using wildcard to match actual .exe)
-      - name: Upload Release executables
+      # 7. Upload only the normalized exe
+      - name: Upload Release executable
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: target/release/*.exe
-          asset_name: my_app.exe
+          asset_path: target/release/app.exe
+          asset_name: app.exe
           asset_content_type: application/octet-stream
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 9. Upload DLLs to the Release
-      - name: Upload Release DLLs
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: target/release/*.dll
-          asset_name: dlls.zip
-          asset_content_type: application/zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
