@@ -31,27 +31,28 @@ jobs:
           .\vcpkg\vcpkg install gdal:x64-windows-release
           .\vcpkg\vcpkg install osg:x64-windows-release
 
-      # 4. Build with Cargo (release)
+      # 4. Cargo build (release) in 3dtile 子目录
       - name: Cargo build (release)
+        working-directory: 3dtile
         run: cargo build --release --verbose
 
       # 5. Collect EXE + DLLs into a single folder and zip it
       - name: Package binaries
         shell: pwsh
         run: |
-          # 清理临时发布目录（如果存在）
+          # 清理临时发布目录
           if (Test-Path 'out\release') {
             Remove-Item -Recurse -Force 'out\release'
           }
           New-Item -ItemType Directory -Path out\release | Out-Null
-      
-          # 找到 exe 和所有 dll 并复制到 out\release
-          Copy-Item target\release\*.exe out\release\
-          Copy-Item target\release\*.dll out\release\
-      
+
+          # 复制 3dtile/target/release 下的 exe 和 dll
+          Copy-Item 3dtile\target\release\*.exe out\release\
+          Copy-Item 3dtile\target\release\*.dll out\release\
+
           # （可选）拷贝 vcpkg 运行时 DLL
           # Copy-Item vcpkg\installed\x64-windows\bin\*.dll out\release\
-      
+
           # 压成 ZIP
           Compress-Archive -Path out\release\* -DestinationPath out\release.zip
 
