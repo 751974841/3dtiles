@@ -1,15 +1,19 @@
 name: Windows Build & Release
-
-on:
-  workflow_dispatch:
-
+on: workflow_dispatch
 jobs:
   build-and-release:
     runs-on: windows-latest
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: List repo root
+        shell: pwsh
+        run: |
+          Write-Host "=== Repo Root ==="
+          dir -Name
+          Write-Host "=== Repo Root (Recursive) ==="
+          dir -Recurse -Depth 2 | Select-Object -ExpandProperty FullName
 
       - name: Cache vcpkg directory
         uses: actions/cache@v4
@@ -17,8 +21,6 @@ jobs:
         with:
           path: ./vcpkg
           key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/build.rs') }}
-          restore-keys: |
-            ${{ runner.os }}-vcpkg-
 
       - name: Install & Bootstrap vcpkg
         if: steps.cache-vcpkg.outputs.cache-hit != 'true'
@@ -29,20 +31,15 @@ jobs:
           .\vcpkg\vcpkg install osg:x64-windows-release
 
       - name: Cargo build (release)
-        run: cargo build --release --verbose --manifest-path=3dtile/Cargo.toml
+        run: cargo build --release --verbose --manifest-path=3dtiles/Cargo.toml
 
       - name: Package binaries
         shell: pwsh
         run: |
-          if (Test-Path 'out\release') {
-            Remove-Item -Recurse -Force 'out\release'
-          }
+          if (Test-Path 'out\release') { Remove-Item -Recurse -Force 'out\release' }
           New-Item -ItemType Directory -Path out\release | Out-Null
-
-          # 把 3dtile/target/release 下的 exe 和 dll 复制过来
-          Copy-Item 3dtile\target\release\*.exe out\release\
-          Copy-Item 3dtile\target\release\*.dll out\release\
-
+          Copy-Item 3dtiles\target\release\*.exe out\release\
+          Copy-Item 3dtiles\target\release\*.dll out\release\
           Compress-Archive -Path out\release\* -DestinationPath out\release.zip
 
       - name: Create GitHub Release
