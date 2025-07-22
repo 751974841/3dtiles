@@ -1,65 +1,62 @@
-name: Windows Build and Release
-
-on:
-  push:
-    tags:
-      - 'v*'  # 当推送以v开头的标签时触发
-
+name: Windows Build & Release
+on: workflow_dispatch
 jobs:
   build-and-release:
     runs-on: windows-latest
-
     steps:
-    - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-    - name: Cache dependencies
-      uses: actions/cache@v4
-      id: cache-vcpkg
-      with:
-        path: ./vcpkg
-        key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/build.rs') }}
-        restore-keys: |
-          ${{ runner.os }}-vcpkg-
+      - name: List repo root
+        shell: pwsh
+        run: |
+          Write-Host "=== Repo Root ==="
+          dir -Name
+          Write-Host "=== Repo Root (Recursive) ==="
+          dir -Recurse -Depth 2 | Select-Object -ExpandProperty FullName
 
-    - name: Install dependencies on Windows
-      if: steps.cache-vcpkg.outputs.cache-hit != 'true'
-      run: |
-        git clone https://github.com/microsoft/vcpkg.git
-        ./vcpkg/bootstrap-vcpkg.bat
-        ./vcpkg/vcpkg install gdal:x64-windows-release
-        ./vcpkg/vcpkg install osg:x64-windows-release
-        tree ./vcpkg/installed /F /A
+      - name: Cache vcpkg directory
+        uses: actions/cache@v4
+        id: cache-vcpkg
+        with:
+          path: ./vcpkg
+          key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/build.rs') }}
 
-    - name: Build
-      run: cargo build --verbose --release
+      - name: Install & Bootstrap vcpkg
+        if: steps.cache-vcpkg.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
+          .\vcpkg\vcpkg install gdal:x64-windows-release
+          .\vcpkg\vcpkg install osg:x64-windows-release
 
-    - name: Create ZIP package
-      run: |
-        mkdir release
-        cp ./target/release/*.exe ./release/
-        cp ./target/release/*.dll ./release/
-        # 如果需要，可以添加其他文件
-        # cp ./target/release/*.config ./release/
-        # cp ./README.md ./release/
-        7z a release.zip .\release\*
-        
-    - name: Create Release
-      id: create_release
-      uses: softprops/action-gh-release@v1
-      with:
-        name: Release v${{ github.ref_name }}
-        tag_name: ${{ github.ref_name }}
-        body: |
-          Windows build artifacts including:
-          - Executable (.exe)
-          - DLL files
-          Generated automatically by GitHub Actions.
-        draft: false
-        prerelease: false
+      - name: Cargo build (release)
+        run: cargo build --release --verbose --manifest-path=3dtiles/Cargo.toml
 
-    - name: Upload Release Assets
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          release.zip
-        tag_name: ${{ github.ref_name }}
+      - name: Package binaries
+        shell: pwsh
+        run: |
+          if (Test-Path 'out\release') { Remove-Item -Recurse -Force 'out\release' }
+          New-Item -ItemType Directory -Path out\release | Out-Null
+          Copy-Item 3dtiles\target\release\*.exe out\release\
+          Copy-Item 3dtiles\target\release\*.dll out\release\
+          Compress-Archive -Path out\release\* -DestinationPath out\release.zip
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release ${{ github.run_number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release ZIP
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: out\release.zip
+          asset_name: release-v${{ github.run_number }}.zip
+          asset_content_type: application/zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
