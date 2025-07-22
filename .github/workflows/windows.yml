@@ -35,25 +35,31 @@ jobs:
       - name: Cargo build (release)
         run: cargo build --release --verbose
 
-      # 5. 准备 release 目录并复制产物
+      # 5. 准备 release 目录并复制所有运行时依赖
       - name: Prepare release directory
         shell: pwsh
         run: |
+          # 清理旧目录
           if (Test-Path 'release') {
             Remove-Item -Recurse -Force 'release'
           }
           New-Item -ItemType Directory -Path release | Out-Null
 
-          # 把所有 exe 和 dll 复制进去
-          Copy-Item target\release\*.exe release\
-          Copy-Item target\release\*.dll release\
+          # 5.1 复制 Cargo 输出的 exe 和本地 dll
+          Copy-Item target\release\*.exe release\ -ErrorAction SilentlyContinue
+          Copy-Item target\release\*.dll release\ -ErrorAction SilentlyContinue
 
-      # 6. 用 7‑Zip 打包
-      - name: Compress with 7-Zip
+          # 5.2 复制 vcpkg 安装的 GDAL/OSG 等运行时 dll
+          Copy-Item vcpkg\installed\x64-windows\bin\*.dll release\ -ErrorAction SilentlyContinue
+
+      # 6. 用 PowerShell 自带的压缩功能打包
+      - name: Compress release folder
         shell: pwsh
         run: |
-          # -tzip 表示输出 ZIP 格式，release.zip 是目标压缩包
-          & 7z a -tzip release.zip release\*
+          if (Test-Path 'release.zip') {
+            Remove-Item 'release.zip'
+          }
+          Compress-Archive -Path release\* -DestinationPath release.zip
 
       # 7. 创建 Release 并上传 ZIP
       - name: Create GitHub Release
@@ -65,7 +71,7 @@ jobs:
           body: |
             **包含的文件类型：**
             - 可执行程序：`.exe`
-            - 动态链接库：`.dll`
+            - 动态链接库：`.dll`（包括通过 vcpkg 安装的 GDAL/OSG 运行时库）
           files: release.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
