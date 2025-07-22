@@ -8,21 +8,19 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # 1. Checkout source
       - name: Check out repository
         uses: actions/checkout@v4
 
-      # 2. Cache vcpkg
+      - name: List repo files
+        run: dir   # Windows runner，用 ls -R . 替换成 Linux
+
       - name: Cache vcpkg directory
         uses: actions/cache@v4
         id: cache-vcpkg
         with:
           path: ./vcpkg
           key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/build.rs') }}
-          restore-keys: |
-            ${{ runner.os }}-vcpkg-
 
-      # 3. Install & bootstrap vcpkg if not cached
       - name: Install & Bootstrap vcpkg
         if: steps.cache-vcpkg.outputs.cache-hit != 'true'
         run: |
@@ -31,44 +29,29 @@ jobs:
           .\vcpkg\vcpkg install gdal:x64-windows-release
           .\vcpkg\vcpkg install osg:x64-windows-release
 
-      # 4. Cargo build (release) in 3dtile 子目录
       - name: Cargo build (release)
-        working-directory: 3dtile
+        # 如果你的 Cargo.toml 在子目录 3dtiles，填它；否则去掉下面一行
+        working-directory: 3dtiles
         run: cargo build --release --verbose
 
-      # 5. Collect EXE + DLLs into a single folder and zip it
       - name: Package binaries
         shell: pwsh
         run: |
-          # 清理临时发布目录
-          if (Test-Path 'out\release') {
-            Remove-Item -Recurse -Force 'out\release'
-          }
+          if (Test-Path 'out\release') { Remove-Item -Recurse -Force 'out\release' }
           New-Item -ItemType Directory -Path out\release | Out-Null
-
-          # 复制 3dtile/target/release 下的 exe 和 dll
-          Copy-Item 3dtile\target\release\*.exe out\release\
-          Copy-Item 3dtile\target\release\*.dll out\release\
-
-          # （可选）拷贝 vcpkg 运行时 DLL
-          # Copy-Item vcpkg\installed\x64-windows\bin\*.dll out\release\
-
-          # 压成 ZIP
+          Copy-Item 3dtiles\target\release\*.exe out\release\
+          Copy-Item 3dtiles\target\release\*.dll out\release\
           Compress-Archive -Path out\release\* -DestinationPath out\release.zip
 
-      # 6. Create or update GitHub Release
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
         with:
           tag_name: v${{ github.run_number }}
           release_name: Release ${{ github.run_number }}
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 7. Upload the ZIP as the sole asset
       - name: Upload Release ZIP
         uses: actions/upload-release-asset@v1
         with:
