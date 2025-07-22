@@ -11,15 +11,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: List repo files
-        run: dir   # Windows runner，用 ls -R . 替换成 Linux
-
       - name: Cache vcpkg directory
         uses: actions/cache@v4
         id: cache-vcpkg
         with:
           path: ./vcpkg
           key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/build.rs') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-
 
       - name: Install & Bootstrap vcpkg
         if: steps.cache-vcpkg.outputs.cache-hit != 'true'
@@ -30,17 +29,20 @@ jobs:
           .\vcpkg\vcpkg install osg:x64-windows-release
 
       - name: Cargo build (release)
-        # 如果你的 Cargo.toml 在子目录 3dtiles，填它；否则去掉下面一行
-        working-directory: 3dtiles
-        run: cargo build --release --verbose
+        run: cargo build --release --verbose --manifest-path=3dtile/Cargo.toml
 
       - name: Package binaries
         shell: pwsh
         run: |
-          if (Test-Path 'out\release') { Remove-Item -Recurse -Force 'out\release' }
+          if (Test-Path 'out\release') {
+            Remove-Item -Recurse -Force 'out\release'
+          }
           New-Item -ItemType Directory -Path out\release | Out-Null
-          Copy-Item 3dtiles\target\release\*.exe out\release\
-          Copy-Item 3dtiles\target\release\*.dll out\release\
+
+          # 把 3dtile/target/release 下的 exe 和 dll 复制过来
+          Copy-Item 3dtile\target\release\*.exe out\release\
+          Copy-Item 3dtile\target\release\*.dll out\release\
+
           Compress-Archive -Path out\release\* -DestinationPath out\release.zip
 
       - name: Create GitHub Release
