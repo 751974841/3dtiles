@@ -35,47 +35,18 @@ jobs:
       - name: Cargo build (release)
         run: cargo build --release --verbose
 
-      # 5. Prepare release directory and collect all runtimes & plugins
-      - name: Prepare release directory
+      # 5. Compress the entire target/release folder
+      - name: Compress target/release
         shell: pwsh
         run: |
-          # clean up old
-          if (Test-Path 'release') {
-            Remove-Item -Recurse -Force 'release'
-          }
-          New-Item -ItemType Directory -Path release | Out-Null
-
-          # 5.1 Copy your binaries
-          Copy-Item target\release\*.exe release\ -ErrorAction SilentlyContinue
-          Copy-Item target\release\*.dll release\ -ErrorAction SilentlyContinue
-
-          # 5.2 Copy all vcpkg-installed runtime DLLs
-          Get-ChildItem -Directory vcpkg\installed | ForEach-Object {
-            $bin = Join-Path $_.FullName 'bin'
-            if (Test-Path $bin) {
-              Copy-Item "$bin\*.dll" release\ -ErrorAction SilentlyContinue
-
-              # 5.3 Copy any osgPlugins-* plugin directories
-              Get-ChildItem -Directory "$bin\osgPlugins*" -ErrorAction SilentlyContinue | ForEach-Object {
-                Copy-Item $_.FullName "release\$_" -Recurse -ErrorAction SilentlyContinue
-              }
-            }
-          }
-
-          # debug list
-          Write-Host "=== release folder contents ==="
-          dir release\*
-
-      # 6. Compress release folder into ZIP
-      - name: Compress release folder
-        shell: pwsh
-        run: |
+          # 如果已有旧的压缩包就删除
           if (Test-Path 'release.zip') {
             Remove-Item 'release.zip'
           }
-          Compress-Archive -Path release\* -DestinationPath release.zip
+          # 将 target\release 下的所有文件和子目录打包到 release.zip
+          Compress-Archive -Path target\release\* -DestinationPath release.zip
 
-      # 7. Create GitHub Release and upload ZIP
+      # 6. Create GitHub Release and upload ZIP
       - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v1
@@ -83,11 +54,11 @@ jobs:
           tag_name: v${{ github.run_number }}
           release_name: Release ${{ github.run_number }}
           body: |
-            **包含的文件类型：**
-            - 可执行程序：`.exe`
-            - 本地动态库：`.dll`
-            - vcpkg 运行时库：`.dll`（GDAL、OSG 及其依赖）
-            - OSG 插件目录：`osgPlugins-*`（`.dll` 插件）
+            本次 Release 包含了整个 `target/release` 目录下的所有编译产物：
+            - 可执行文件（`.exe`）
+            - 动态链接库（`.dll`）
+            - 调试符号（`.pdb`，如果有）
+            - 以及其他编译输出文件
           files: release.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
