@@ -1,27 +1,28 @@
 name: Windows Build & Release
-on: workflow_dispatch
+
+on:
+  workflow_dispatch:
+
 jobs:
   build-and-release:
     runs-on: windows-latest
+
     steps:
+      # 1. Checkout source
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: List repo root
-        shell: pwsh
-        run: |
-          Write-Host "=== Repo Root ==="
-          dir -Name
-          Write-Host "=== Repo Root (Recursive) ==="
-          dir -Recurse -Depth 2 | Select-Object -ExpandProperty FullName
-
+      # 2. Cache vcpkg
       - name: Cache vcpkg directory
         uses: actions/cache@v4
         id: cache-vcpkg
         with:
           path: ./vcpkg
           key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/build.rs') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-
 
+      # 3. Install & Bootstrap vcpkg if needed
       - name: Install & Bootstrap vcpkg
         if: steps.cache-vcpkg.outputs.cache-hit != 'true'
         run: |
@@ -30,33 +31,41 @@ jobs:
           .\vcpkg\vcpkg install gdal:x64-windows-release
           .\vcpkg\vcpkg install osg:x64-windows-release
 
+      # 4. Cargo build (release)
       - name: Cargo build (release)
-        run: cargo build --release --verbose --manifest-path=3dtiles/Cargo.toml
+        run: cargo build --release --verbose
 
-      - name: Package binaries
+      # 5. 准备 release 目录并复制产物
+      - name: Prepare release directory
         shell: pwsh
         run: |
-          if (Test-Path 'out\release') { Remove-Item -Recurse -Force 'out\release' }
-          New-Item -ItemType Directory -Path out\release | Out-Null
-          Copy-Item 3dtiles\target\release\*.exe out\release\
-          Copy-Item 3dtiles\target\release\*.dll out\release\
-          Compress-Archive -Path out\release\* -DestinationPath out\release.zip
+          if (Test-Path 'release') {
+            Remove-Item -Recurse -Force 'release'
+          }
+          New-Item -ItemType Directory -Path release | Out-Null
 
+          # 把所有 exe 和 dll 复制进去
+          Copy-Item target\release\*.exe release\
+          Copy-Item target\release\*.dll release\
+
+      # 6. 用 7‑Zip 打包
+      - name: Compress with 7-Zip
+        shell: pwsh
+        run: |
+          # -tzip 表示输出 ZIP 格式，release.zip 是目标压缩包
+          & 7z a -tzip release.zip release\*
+
+      # 7. 创建 Release 并上传 ZIP
       - name: Create GitHub Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ github.run_number }}
           release_name: Release ${{ github.run_number }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Release ZIP
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: out\release.zip
-          asset_name: release-v${{ github.run_number }}.zip
-          asset_content_type: application/zip
+          body: |
+            **包含的文件类型：**
+            - 可执行程序：`.exe`
+            - 动态链接库：`.dll`
+          files: release.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
