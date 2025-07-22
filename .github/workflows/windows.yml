@@ -49,10 +49,19 @@ jobs:
           Copy-Item target\release\*.exe release\ -ErrorAction SilentlyContinue
           Copy-Item target\release\*.dll release\ -ErrorAction SilentlyContinue
 
-          # 5.2 复制 vcpkg 安装的 GDAL/OSG 等运行时 dll
-          Copy-Item vcpkg\installed\x64-windows\bin\*.dll release\ -ErrorAction SilentlyContinue
+          # 5.2 复制 vcpkg 安装的所有运行时 DLL（遍历所有 triplet）
+          Get-ChildItem -Directory vcpkg\installed | ForEach-Object {
+            $bin = Join-Path $_.FullName 'bin'
+            if (Test-Path $bin) {
+              Copy-Item "$bin\*.dll" release\ -ErrorAction SilentlyContinue
+            }
+          }
 
-      # 6. 用 PowerShell 自带的压缩功能打包
+          # （调试用）列出 release 目录内容
+          Write-Host "=== Release folder contents ==="
+          dir release\*
+
+      # 6. 使用 PowerShell 自带的压缩功能打包
       - name: Compress release folder
         shell: pwsh
         run: |
@@ -70,8 +79,9 @@ jobs:
           release_name: Release ${{ github.run_number }}
           body: |
             **包含的文件类型：**
-            - 可执行程序：`.exe`
-            - 动态链接库：`.dll`（包括通过 vcpkg 安装的 GDAL/OSG 运行时库）
+            - 可执行程序：`.exe`  
+            - 本地动态库：`.dll`  
+            - vcpkg 运行时库：`.dll`（GDAL、OSG 及其依赖）
           files: release.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
